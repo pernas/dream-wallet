@@ -8,15 +8,9 @@ import Either from 'data.either'
 import { WalletUtils } from '../immutable'
 import * as Lens from '../lens'
 
-
-export const parseDecrypted = (json) => {
-  try {
-    return Either.Right(JSON.parse(json))
-  }
-  catch (e) {
-    return Either.Left("Wrong password")
-  }
-}
+export const parseDecrypted = (json) => (
+  Either.try(JSON.parse)(json).leftMap(() => new Error('WRONG_PASSWORD'))
+)
 
 export const sha256 = (data) => crypto.createHash('sha256').update(data).digest();
 
@@ -37,7 +31,7 @@ const decryptWrapper = curry(
 
 
 // decryptPayload :: String -> ServerPayload -> Either error DecryptedPayload
-export const decryptPayload = password => payload => {
+export const decryptPayload = curry((password, payload) => {
   const plens = lensProp('payload');
   const ilens = lensProp('pbkdf2_iterations');
   const vlens = lensProp('version');
@@ -49,7 +43,7 @@ export const decryptPayload = password => payload => {
          .map(o => assoc('walletImmutable', o.payload, o))
          .map(o => dissoc('payload', o))
          .map(o => assoc('password', password, o))
-}
+})
 
 // encryptState :: State -> JSON
 export const encryptState = state => {
