@@ -36,6 +36,7 @@ export const typeDef = (Type) => {
 }
 
 export const iRename = curry((from, to, i) => i.set(to, i.get(from)).delete(from))
+export const rename = curry((from, to, x) => assoc(to, x[from], dissoc(from, x)))
 
 export const shift = (x) => ({
   forward: () => x,

@@ -2,6 +2,8 @@ import 'isomorphic-fetch'
 import Promise from 'es6-promise'
 import { merge, identity } from 'ramda'
 import { futurizeP } from 'futurize'
+import Task from 'data.task'
+import * as PayloadUtil from '../immutable/Payload'
 Promise.polyfill()
 
 export const BLOCKCHAIN_INFO = 'https://blockchain.info/'
@@ -42,7 +44,7 @@ const createApi = ({
   }
 
   // checkStatus :: Response -> Promise Response
-  const checkStatus = (r) => r.ok ? Promise.resolve(r) : r.json().then(j => Promise.reject(j))
+  const checkStatus = (r) => r.ok ? Promise.resolve(r) : r.text().then(j => Promise.reject(j))
 
   // extractData :: Response -> Promise (JSON | BLOB | TEXT)
   const extractData = (r) => {
@@ -74,6 +76,33 @@ const createApi = ({
   const fetchWalletWithSharedKey = (guid, sharedKey) => {
     var data = { guid, sharedKey, method: 'wallet.aes.json', format: 'json' }
     return request('POST', 'wallet', data)
+  }
+
+  // fetchPayload :: String -> String -> Task Error Payload$Encrypted
+  const fetchPayload = (guid, sharedKey) => {
+    return new Task((reject, resolve) => {
+      fetchWalletWithSharedKey(guid, sharedKey).then(resolve, reject)
+    }).map(PayloadUtil.fromJS)
+  }
+
+  // savePayload :: Payload$Encrypted -> Task Error String
+  const savePayload = (guid, sharedKey, payload) => {
+    const createSyncData = () => ({
+      guid,
+      sharedKey,
+      length: payload.payload.length,
+      payload: payload.payload,
+      checksum: PayloadUtil.getChecksum(payload),
+      old_checksum: payload.prevChecksum
+    })
+    return new Task((reject, resolve) => {
+      if (PayloadUtil.isDecrypted(payload)) {
+        reject(new Error('Tried to save decrypted payload'))
+      } else {
+        let data = createSyncData()
+        saveWallet(data).then(resolve, reject)
+      }
+    })
   }
 
   // fetchWallet :: (String) -> Promise JSON
@@ -152,7 +181,9 @@ const createApi = ({
 
   return {
     fetchWalletWithSharedKey: future(fetchWalletWithSharedKey),
+    fetchPayload: future(fetchPayload),
     saveWallet: future(saveWallet),
+    savePayload: future(savePayload),
     createWallet: future(createWallet),
     fetchBlockchainData: future(fetchBlockchainData),
     obtainSessionToken: future(obtainSessionToken),
