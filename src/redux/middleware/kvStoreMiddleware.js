@@ -6,6 +6,14 @@ import * as KV from '../../data/KVStoreEntry'
 const KV_SYNC = 'KV_SYNC'
 const syncKv = (kv) => ({ type: KV_SYNC, payload: kv })
 
+export const kvReducerEnhancer = (typeId, reducer) => (state = KV.createEmpty(typeId), action) => {
+  let { type, payload } = action
+  if (type === KV_SYNC && payload.typeId === typeId) {
+    return payload
+  }
+  return R.over(KV.value, (value) => reducer(value, action), state)
+}
+
 const kvStoreMiddleware = (reducers, { api, path, walletPath, serialize = JSON.stringify } = {}) => {
   let keyPaths = R.keys(reducers)
   let select = (state) => (keyPath) => state[path][keyPath]
@@ -33,17 +41,10 @@ const kvStoreMiddleware = (reducers, { api, path, walletPath, serialize = JSON.s
 
     zipped.forEach(([p, c]) => {
       if (c.magicHash === void 0) {
-        console.log('kv: fetching')
         let kv = KV.fromHdWallet(hd, c.typeId)
         run(api.fetch(kv))
-      } else {
-        console.log(`kv: has value (is ${serialize(c.value)})`)
-        if (serialize(p.value) !== serialize(c.value)) {
-          console.log(`kv: updating (was ${serialize(p.value)})`)
-          run(api.update(c))
-        } else {
-          console.log('kv: no update needed')
-        }
+      } else if (serialize(p.value) !== serialize(c.value)) {
+        run(api.update(c))
       }
     })
 
